@@ -220,9 +220,191 @@ async function sendContactMessageEmail({
   });
 }
 
+/**
+ * Welcome email after successful registration
+ */
+async function sendWelcomeEmail({ to, name }) {
+  const displayName = escapeHtml(name || "there");
+  const siteUrl = process.env.FRONTEND_URL || "https://watchtriplem.co.ke";
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Triple M</title>
+</head>
+<body style="margin:0;padding:0;background:#150f19;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#150f19;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:520px;background:#221828;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+          <tr>
+            <td style="padding:32px 28px 12px;text-align:center;">
+              <h1 style="margin:0;font-size:24px;line-height:1.3;color:#ffffff;">
+                Welcome to Triple M
+              </h1>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#a1a1aa;">
+                Hi ${displayName}, your account is ready.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 20px;text-align:center;">
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#d4d4d8;">
+                Browse movies and shows, save titles to My List, and subscribe when you’re ready to stream.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 28px;text-align:center;">
+              <a href="${escapeHtml(siteUrl)}"
+                 style="display:inline-block;background:#eab54d;color:#241800;text-decoration:none;font-weight:700;font-size:15px;padding:14px 28px;border-radius:12px;">
+                Start watching
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:24px 0 0;font-size:12px;color:#52525b;">
+          &copy; ${new Date().getFullYear()} Triple M
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  const text = `
+Welcome to Triple M
+
+Hi ${name || "there"}, your account is ready.
+
+Browse movies and shows, save titles to My List, and subscribe when you’re ready to stream.
+
+${siteUrl}
+
+Triple M
+`;
+
+  return sendEmail({
+    to,
+    subject: "Welcome to Triple M",
+    html,
+    text,
+    replyTo: INBOXES.support,
+  });
+}
+
+/**
+ * Subscription reminder (before expiry)
+ * daysLeft: number of days remaining
+ */
+async function sendSubscriptionReminderEmail({
+  to,
+  name,
+  expiresAt,
+  daysLeft,
+  planLabel,
+}) {
+  const displayName = escapeHtml(name || "there");
+  const siteUrl = process.env.FRONTEND_URL || "https://watchtriplem.co.ke";
+  const profileUrl = `${siteUrl}/profile`;
+  const expiryText = expiresAt
+    ? new Date(expiresAt).toLocaleString("en-KE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "soon";
+
+  const urgency =
+    daysLeft <= 1
+      ? "Your subscription ends tomorrow."
+      : `Your subscription ends in ${daysLeft} days.`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subscription reminder</title>
+</head>
+<body style="margin:0;padding:0;background:#150f19;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#150f19;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:520px;background:#221828;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+          <tr>
+            <td style="padding:32px 28px 12px;text-align:center;">
+              <h1 style="margin:0;font-size:22px;line-height:1.3;color:#ffffff;">
+                Subscription reminder
+              </h1>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#a1a1aa;">
+                Hi ${displayName}, ${escapeHtml(urgency)}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 20px;text-align:center;">
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#d4d4d8;">
+                ${planLabel ? `Plan: <strong style="color:#e4e4e7;">${escapeHtml(planLabel)}</strong><br/>` : ""}
+                Expires: <strong style="color:#e4e4e7;">${escapeHtml(expiryText)}</strong>
+              </p>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#a1a1aa;">
+                Renew now to keep streaming without interruption.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 28px;text-align:center;">
+              <a href="${escapeHtml(profileUrl)}"
+                 style="display:inline-block;background:#eab54d;color:#241800;text-decoration:none;font-weight:700;font-size:15px;padding:14px 28px;border-radius:12px;">
+                Renew subscription
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:24px 0 0;font-size:12px;color:#52525b;">
+          &copy; ${new Date().getFullYear()} Triple M
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  const text = `
+Subscription reminder
+
+Hi ${name || "there"}, ${urgency}
+
+${planLabel ? `Plan: ${planLabel}\n` : ""}Expires: ${expiryText}
+
+Renew here: ${profileUrl}
+
+Triple M
+`;
+
+  return sendEmail({
+    to,
+    subject:
+      daysLeft <= 1
+        ? "Your Triple M subscription ends tomorrow"
+        : `Your Triple M subscription ends in ${daysLeft} days`,
+    html,
+    text,
+    replyTo: INBOXES.billing,
+  });
+}
+
 module.exports = {
   INBOXES,
   sendEmail,
   sendPasswordResetEmail,
   sendContactMessageEmail,
+  sendWelcomeEmail,
+  sendSubscriptionReminderEmail
 };

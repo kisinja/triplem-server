@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("node:crypto");
 const prisma = require("../lib/prisma");
-const { sendPasswordResetEmail } = require("../utils/email");
+const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/email");
 const { AppError } = require("../middleware/error-handler");
 const { createPasswordResetLink } = require("../utils/password-reset");
 
@@ -142,6 +142,12 @@ async function register(req, res) {
     user: toPublicUser(user),
     token: createToken(user, jwtSecret),
   });
+
+  // Welcome email
+  sendWelcomeEmail({
+    to: user.email,
+    name: user.name ? user.name : user.email.split("@")[0],
+  });
 }
 
 async function login(req, res) {
@@ -199,7 +205,7 @@ async function getMe(req, res, next) {
       subscription: {
         active,
         expiresAt: user.subscriptionExpiresAt,
-        admin:true,
+        admin: true,
       },
     });
   } catch (err) {
