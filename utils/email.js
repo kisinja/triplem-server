@@ -226,49 +226,109 @@ async function sendContactMessageEmail({
 async function sendWelcomeEmail({ to, name }) {
   const displayName = escapeHtml(name || "there");
   const siteUrl = process.env.FRONTEND_URL || "https://watchtriplem.co.ke";
+  const supportEmail = INBOXES.support;
 
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Welcome to Triple M</title>
 </head>
-<body style="margin:0;padding:0;background:#150f19;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#150f19;padding:40px 16px;">
+<body style="margin:0;padding:0;background:#0f0b13;font-family:Arial,Helvetica,sans-serif;color:#f4edf6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f0b13;padding:32px 12px;">
     <tr>
       <td align="center">
-        <table width="100%" style="max-width:520px;background:#221828;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <table role="presentation" width="100%" style="max-width:560px;background:#1a1322;border-radius:18px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+
+          <!-- Header -->
           <tr>
-            <td style="padding:32px 28px 12px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;line-height:1.3;color:#ffffff;">
-                Welcome to Triple M
+            <td style="padding:28px 28px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="left" style="font-size:20px;font-weight:700;letter-spacing:0.3px;color:#ffffff;">
+                    Triple M
+                  </td>
+                  <td align="right" style="font-size:12px;color:#a1a1aa;">
+                    Welcome email
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hero -->
+          <tr>
+            <td style="padding:36px 28px 8px;text-align:left;">
+              <p style="margin:0 0 10px;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#eab54d;">
+                You're in
+              </p>
+              <h1 style="margin:0;font-size:28px;line-height:1.25;color:#ffffff;">
+                Welcome to Triple M, ${displayName}
               </h1>
-              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#a1a1aa;">
-                Hi ${displayName}, your account is ready.
+              <p style="margin:14px 0 0;font-size:15px;line-height:1.65;color:#c4c0c8;">
+                Your account is ready. Browse movies and shows, save titles to My List, and subscribe when you want full streaming access.
               </p>
             </td>
           </tr>
+
+          <!-- CTA -->
           <tr>
-            <td style="padding:8px 28px 20px;text-align:center;">
-              <p style="margin:0;font-size:14px;line-height:1.6;color:#d4d4d8;">
-                Browse movies and shows, save titles to My List, and subscribe when you’re ready to stream.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:0 28px 28px;text-align:center;">
+            <td style="padding:22px 28px 8px;">
               <a href="${escapeHtml(siteUrl)}"
-                 style="display:inline-block;background:#eab54d;color:#241800;text-decoration:none;font-weight:700;font-size:15px;padding:14px 28px;border-radius:12px;">
+                 style="display:inline-block;background:#eab54d;color:#241800;text-decoration:none;font-weight:700;font-size:15px;padding:14px 24px;border-radius:12px;">
                 Start watching
               </a>
             </td>
           </tr>
+
+          <!-- Features -->
+          <tr>
+            <td style="padding:24px 28px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#150f19;border:1px solid rgba(255,255,255,0.06);border-radius:14px;">
+                <tr>
+                  <td style="padding:18px 18px 6px;font-size:14px;line-height:1.6;color:#ddd6e2;">
+                    <strong style="color:#ffffff;">What you can do now</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 18px 16px;font-size:14px;line-height:1.7;color:#b7b0bd;">
+                    • Explore trending movies and series<br/>
+                    • Save favorites to My List<br/>
+                    • Subscribe anytime to unlock full playback
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Secondary text -->
+          <tr>
+            <td style="padding:18px 28px 30px;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#8b8491;">
+                Need help getting started? Reply to this email or contact
+                <a href="mailto:${escapeHtml(supportEmail)}" style="color:#eab54d;text-decoration:none;">
+                  ${escapeHtml(supportEmail)}
+                </a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:18px 28px;background:#140f18;border-top:1px solid rgba(255,255,255,0.06);">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#6f6875;">
+                © ${new Date().getFullYear()} Triple M ·
+                <a href="${escapeHtml(siteUrl)}" style="color:#9a93a0;text-decoration:none;">watchtriplem.co.ke</a>
+              </p>
+              <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#5c5560;">
+                You received this email because an account was created with this address.
+              </p>
+            </td>
+          </tr>
+
         </table>
-        <p style="margin:24px 0 0;font-size:12px;color:#52525b;">
-          &copy; ${new Date().getFullYear()} Triple M
-        </p>
       </td>
     </tr>
   </table>
@@ -277,15 +337,17 @@ async function sendWelcomeEmail({ to, name }) {
 `;
 
   const text = `
-Welcome to Triple M
+Welcome to Triple M, ${name || "there"}
 
-Hi ${name || "there"}, your account is ready.
+Your account is ready.
 
-Browse movies and shows, save titles to My List, and subscribe when you’re ready to stream.
+Browse movies and shows, save titles to My List, and subscribe when you want full streaming access.
 
-${siteUrl}
+Start watching: ${siteUrl}
 
-Triple M
+Need help? ${supportEmail}
+
+© ${new Date().getFullYear()} Triple M
 `;
 
   return sendEmail({
@@ -406,5 +468,5 @@ module.exports = {
   sendPasswordResetEmail,
   sendContactMessageEmail,
   sendWelcomeEmail,
-  sendSubscriptionReminderEmail
+  sendSubscriptionReminderEmail,
 };
