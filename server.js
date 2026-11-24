@@ -22,12 +22,9 @@ const app = express();
 app.set("trust proxy", 1); // Render is behind a proxy; needed for per-IP limits
 const PORT = process.env.PORT || 3000;
 
-const allowedOrigins = [
-  "https://triplem-ui.vercel.app",
-  "http://localhost:5173",
-  "https://watchtriplem.co.ke",
-  "https://www.watchtriplem.co.ke",
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : [];
 
 app.use(
   cors({
