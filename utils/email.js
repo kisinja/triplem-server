@@ -462,6 +462,238 @@ Triple M
   });
 }
 
+/**
+ * Formal subscription payment receipt
+ */
+async function sendPaymentReceiptEmail({
+  to,
+  name,
+  planLabel,
+  amountKes,
+  currency = "KES",
+  expiresAt,
+  paidAt,
+  mpesaReceipt,
+  reference, // your providerPaymentId / internal ref
+  phone,
+}) {
+  const displayName = escapeHtml(name || "Customer");
+  const siteUrl = process.env.FRONTEND_URL || "https://watchtriplem.co.ke";
+  const supportEmail = INBOXES.billing || INBOXES.support;
+
+  const amountText = `${currency} ${Number(amountKes || 0).toFixed(0)}`;
+  const paidAtText = paidAt
+    ? new Date(paidAt).toLocaleString("en-KE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : new Date().toLocaleString("en-KE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+  const expiryText = expiresAt
+    ? new Date(expiresAt).toLocaleString("en-KE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "—";
+
+  const receiptNo = escapeHtml(mpesaReceipt || reference || `TM-${Date.now()}`);
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment receipt</title>
+</head>
+<body style="margin:0;padding:0;background:#0f0b13;font-family:Arial,Helvetica,sans-serif;color:#f4edf6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f0b13;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width:560px;background:#1a1322;border-radius:18px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:28px 28px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="left" style="font-size:20px;font-weight:700;color:#ffffff;">
+                    Triple M
+                  </td>
+                  <td align="right" style="font-size:12px;color:#a1a1aa;">
+                    Payment receipt
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td style="padding:28px 28px 6px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#eab54d;">
+                Receipt
+              </p>
+              <h1 style="margin:0;font-size:24px;line-height:1.3;color:#ffffff;">
+                Payment confirmed
+              </h1>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#c4c0c8;">
+                Hi ${displayName}, thank you for your payment. Your subscription is active.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Receipt box -->
+          <tr>
+            <td style="padding:18px 28px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                style="background:#150f19;border:1px solid rgba(255,255,255,0.08);border-radius:14px;">
+                <tr>
+                  <td style="padding:16px 18px;font-size:13px;line-height:1.8;color:#d4d4d8;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#d4d4d8;">
+                      <tr>
+                        <td style="padding:4px 0;color:#9a93a0;">Receipt No.</td>
+                        <td align="right" style="padding:4px 0;color:#ffffff;font-weight:700;">${receiptNo}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;color:#9a93a0;">Date paid</td>
+                        <td align="right" style="padding:4px 0;">${escapeHtml(paidAtText)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;color:#9a93a0;">Billed to</td>
+                        <td align="right" style="padding:4px 0;">${displayName}</td>
+                      </tr>
+                      ${
+                        phone
+                          ? `<tr>
+                        <td style="padding:4px 0;color:#9a93a0;">Phone</td>
+                        <td align="right" style="padding:4px 0;">${escapeHtml(String(phone))}</td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        reference
+                          ? `<tr>
+                        <td style="padding:4px 0;color:#9a93a0;">Reference</td>
+                        <td align="right" style="padding:4px 0;word-break:break-all;">${escapeHtml(String(reference))}</td>
+                      </tr>`
+                          : ""
+                      }
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Line item -->
+          <tr>
+            <td style="padding:12px 28px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                style="border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
+                <tr style="background:#150f19;">
+                  <td style="padding:12px 16px;font-size:12px;color:#9a93a0;text-transform:uppercase;letter-spacing:0.04em;">
+                    Description
+                  </td>
+                  <td align="right" style="padding:12px 16px;font-size:12px;color:#9a93a0;text-transform:uppercase;letter-spacing:0.04em;">
+                    Amount
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;color:#f4edf6;border-top:1px solid rgba(255,255,255,0.06);">
+                    ${escapeHtml(planLabel || "Subscription")}<br/>
+                    <span style="font-size:12px;color:#9a93a0;">Valid until ${escapeHtml(expiryText)}</span>
+                  </td>
+                  <td align="right" style="padding:14px 16px;font-size:14px;font-weight:700;color:#eab54d;border-top:1px solid rgba(255,255,255,0.06);">
+                    ${escapeHtml(amountText)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;font-weight:700;color:#ffffff;border-top:1px solid rgba(255,255,255,0.06);">
+                    Total paid
+                  </td>
+                  <td align="right" style="padding:14px 16px;font-size:16px;font-weight:700;color:#eab54d;border-top:1px solid rgba(255,255,255,0.06);">
+                    ${escapeHtml(amountText)}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding:20px 28px 10px;">
+              <a href="${escapeHtml(siteUrl + "/profile")}"
+                 style="display:inline-block;background:#eab54d;color:#241800;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:12px;">
+                View billing history
+              </a>
+            </td>
+          </tr>
+
+          <!-- Help -->
+          <tr>
+            <td style="padding:10px 28px 28px;">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#8b8491;">
+                Questions about this payment? Contact
+                <a href="mailto:${escapeHtml(supportEmail)}" style="color:#eab54d;text-decoration:none;">
+                  ${escapeHtml(supportEmail)}
+                </a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px;background:#140f18;border-top:1px solid rgba(255,255,255,0.06);">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#6f6875;">
+                © ${new Date().getFullYear()} Triple M ·
+                <a href="${escapeHtml(siteUrl)}" style="color:#9a93a0;text-decoration:none;">watchtriplem.co.ke</a>
+              </p>
+              <p style="margin:6px 0 0;font-size:11px;color:#5c5560;">
+                This is an automated receipt for your records.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  const text = `
+TRIPLE M — PAYMENT RECEIPT
+
+Hi ${name || "Customer"}, thank you for your payment.
+
+Receipt No.: ${mpesaReceipt || reference || "N/A"}
+Date paid: ${paidAtText}
+Plan: ${planLabel || "Subscription"}
+Amount: ${amountText}
+Valid until: ${expiryText}
+${phone ? `Phone: ${phone}` : ""}
+${reference ? `Reference: ${reference}` : ""}
+
+View billing history: ${siteUrl}/profile
+
+Questions? ${supportEmail}
+
+© ${new Date().getFullYear()} Triple M
+`;
+
+  return sendEmail({
+    to,
+    subject: `Receipt: ${planLabel || "Subscription"} — ${amountText}`,
+    html,
+    text,
+    replyTo: INBOXES.billing,
+  });
+}
+
 module.exports = {
   INBOXES,
   sendEmail,
@@ -469,4 +701,5 @@ module.exports = {
   sendContactMessageEmail,
   sendWelcomeEmail,
   sendSubscriptionReminderEmail,
+  sendPaymentReceiptEmail,
 };

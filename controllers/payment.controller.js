@@ -7,6 +7,7 @@ const {
   resolvePaymentPlan,
   extendSubscription,
 } = require("../utils/subscription");
+const { sendPaymentReceiptEmail } = require("../utils/email");
 
 const CURRENCY = "KES";
 
@@ -111,7 +112,8 @@ async function initialize(req, res) {
       Password: password,
       Timestamp: timestamp,
       TransactionType: "CustomerPayBillOnline",
-      Amount: plan.amountKes,
+      //Amount: plan.amountKes,
+      Amount: 1,
       //PartyA: formattedPhone,
       PartyA: "254708374149",
       PartyB: process.env.DARAJA_SHORTCODE,
@@ -186,6 +188,10 @@ async function fulfillReference(reference, extra = {}) {
 
   const plan = resolvePaymentPlan(payment);
 
+  let newExpiry = null;
+  let userForEmail = null;
+  let claimedPayment = null;
+
   await prisma.$transaction(async (db) => {
     const claimed = await db.payment.updateMany({
       where: { id: payment.id, status: "PENDING" },
@@ -197,24 +203,48 @@ async function fulfillReference(reference, extra = {}) {
     });
     if (claimed.count === 0) return;
 
-    const newExpiry = await extendSubscription(
-      db,
-      payment.userId,
-      plan.durationMs,
-    );
+    claimedPayment = true;
 
-    console.log("FULFILL", {
-      reference,
-      dbPlan: payment.plan,
-      amountKes: payment.amount,
-      resolved: plan.id,
-      durationMs: plan.durationMs,
-      expiry: newExpiry.toISOString(),
+    const user = await db.user.findUnique({
+      where: { id: payment.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phoneNumber: true,
+      },
     });
 
+    if (!user) return;
+
+    newExpiry = await extendSubscription(db, payment.userId, plan.durationMs);
+    userForEmail = user;
   });
 
-  return { ...payment, status: "SUCCEEDED", plan: plan.id };
+  // Fire-and-forget receipt (only if we claimed + extended)
+  if (claimedPayment && userForEmail && newExpiry) {
+    sendPaymentReceiptEmail({
+      to: userForEmail.email,
+      name: userForEmail.name,
+      planLabel: plan.label || payment.plan || "Subscription",
+      amountKes: payment.amount,
+      currency: payment.currency || "KES",
+      expiresAt: newExpiry,
+      paidAt: new Date(),
+      mpesaReceipt: extra.mpesaReceipt || payment.mpesaReceipt,
+      reference: payment.providerPaymentId,
+      phone: payment.phone || userForEmail.phoneNumber,
+    }).catch((err) => {
+      console.error("Failed to send payment receipt:", err.message);
+    });
+  }
+
+  return {
+    ...payment,
+    status: "SUCCEEDED",
+    plan: plan.id,
+    mpesaReceipt: extra.mpesaReceipt || payment.mpesaReceipt || null,
+  };
 }
 
 /**
@@ -347,7 +377,7 @@ async function history(req, res) {
     count: payments.length,
     payments,
   });
-};
+}
 
 module.exports = {
   initialize,
