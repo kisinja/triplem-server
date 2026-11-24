@@ -7,6 +7,7 @@ const { AppError } = require("../middleware/error-handler");
 const { createPasswordResetLink } = require("../utils/password-reset");
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_NUMBER_PATTERN = /^0[17]\d{8}$/;
 const BCRYPT_ROUNDS = 12;
 const TOKEN_LIFETIME = "7d"; // was 1h — short sessions force constant re-login
 
@@ -41,7 +42,7 @@ function getRequestBody(body) {
 }
 
 function validateCredentials(body, includeName = false) {
-  const { email, password, name } = getRequestBody(body);
+  const { email, password, name, phoneNumber } = getRequestBody(body);
 
   if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
     throw new AppError(400, "Please provide a valid email address.");
@@ -53,6 +54,7 @@ function validateCredentials(body, includeName = false) {
   assertValidPassword(password);
 
   let normalizedName;
+  let normalizedPhoneNumber;
   if (includeName && name !== undefined && name !== null) {
     if (typeof name !== "string" || name.trim().length > 100) {
       throw new AppError(400, "Name must be 100 characters or fewer.");
@@ -60,10 +62,28 @@ function validateCredentials(body, includeName = false) {
     normalizedName = name.trim() || null;
   }
 
+  if (includeName) {
+    if (typeof phoneNumber !== "string") {
+      throw new AppError(400, "Please provide a valid Kenyan phone number.");
+    }
+
+    normalizedPhoneNumber = phoneNumber.trim().replace(/\D/g, "");
+    if (normalizedPhoneNumber.startsWith("254")) {
+      normalizedPhoneNumber = `0${normalizedPhoneNumber.slice(3)}`;
+    }
+    if (!PHONE_NUMBER_PATTERN.test(normalizedPhoneNumber)) {
+      throw new AppError(
+        400,
+        "Please provide a valid Kenyan phone number starting with 0 (10 digits).",
+      );
+    }
+  }
+
   return {
     email: email.trim().toLowerCase(),
     password,
     ...(includeName ? { name: normalizedName } : {}),
+    ...(includeName ? { phoneNumber: normalizedPhoneNumber } : {}),
   };
 }
 
@@ -72,6 +92,7 @@ function toPublicUser(user) {
     id: user.id, // UUID string
     email: user.email,
     name: user.name ?? null,
+    phoneNumber: user.phoneNumber ?? null,
     role: user.role ?? "USER",
     createdAt: user.createdAt,
   };
@@ -95,14 +116,17 @@ function createToken(user, secret) {
 }
 
 async function register(req, res) {
-  const { email, password, name } = validateCredentials(req.body, true);
+  const { email, password, name, phoneNumber } = validateCredentials(
+    req.body,
+    true,
+  );
   const jwtSecret = getJwtSecret();
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   let user;
   try {
     user = await prisma.user.create({
-      data: { email, passwordHash, name },
+      data: { email, passwordHash, name, phoneNumber },
     });
   } catch (err) {
     // Unique constraint on email
@@ -154,6 +178,7 @@ async function getMe(req, res, next) {
         id: true,
         email: true,
         name: true,
+        phoneNumber: true,
         role: true,
         createdAt: true,
         subscriptionExpiresAt: true,
