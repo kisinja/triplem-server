@@ -113,7 +113,7 @@ async function initialize(req, res) {
       Timestamp: timestamp,
       TransactionType: "CustomerPayBillOnline",
       Amount: plan.amountKes,
-      PartyA: "254708374149",
+      PartyA: formattedPhone,
       PartyB: process.env.DARAJA_SHORTCODE,
       PhoneNumber: formattedPhone,
       CallBackURL: process.env.DARAJA_CALLBACK_URL,
