@@ -111,7 +111,7 @@ async function initialize(req, res) {
       BusinessShortCode: process.env.DARAJA_SHORTCODE,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
+      TransactionType: "CustomerBuyGoodsOnline",
       Amount: plan.amountKes,
       PartyA: formattedPhone,
       PartyB: process.env.DARAJA_SHORTCODE,
