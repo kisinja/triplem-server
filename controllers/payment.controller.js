@@ -114,7 +114,7 @@ async function initialize(req, res) {
       TransactionType: "CustomerBuyGoodsOnline",
       Amount: plan.amountKes,
       PartyA: formattedPhone,
-      PartyB: process.env.DARAJA_SHORTCODE,
+      PartyB: process.env.DARAJA_TILL_NUMBER,
       PhoneNumber: formattedPhone,
       CallBackURL: process.env.DARAJA_CALLBACK_URL,
       AccountReference:
