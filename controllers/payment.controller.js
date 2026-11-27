@@ -8,6 +8,7 @@ const {
   extendSubscription,
 } = require("../utils/subscription");
 const { sendPaymentReceiptEmail } = require("../utils/email");
+const { earnCommissionForPayment } = require("../utils/earnCommision");
 
 const CURRENCY = "KES";
 
@@ -176,6 +177,7 @@ async function initialize(req, res) {
 
 /**
  * Grant access using payment.plan duration (7d or 30d).
+ * Also earns promoter commission in the same transaction when eligible.
  */
 async function fulfillReference(reference, extra = {}) {
   const payment = await prisma.payment.findUnique({
@@ -188,7 +190,7 @@ async function fulfillReference(reference, extra = {}) {
 
   let newExpiry = null;
   let userForEmail = null;
-  let claimedPayment = null;
+  let claimedPayment = false;
 
   await prisma.$transaction(async (db) => {
     const claimed = await db.payment.updateMany({
@@ -203,6 +205,10 @@ async function fulfillReference(reference, extra = {}) {
 
     claimedPayment = true;
 
+    const succeededPayment = await db.payment.findUnique({
+      where: { id: payment.id },
+    });
+
     const user = await db.user.findUnique({
       where: { id: payment.userId },
       select: {
@@ -212,11 +218,15 @@ async function fulfillReference(reference, extra = {}) {
         phoneNumber: true,
       },
     });
-
     if (!user) return;
 
     newExpiry = await extendSubscription(db, payment.userId, plan.durationMs);
     userForEmail = user;
+
+    // Idempotent: unique paymentId + P2002 swallow inside helper
+    if (succeededPayment) {
+      await earnCommissionForPayment(db, succeededPayment);
+    }
   });
 
   // Fire-and-forget receipt (only if we claimed + extended)

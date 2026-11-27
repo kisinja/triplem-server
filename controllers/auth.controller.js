@@ -5,6 +5,8 @@ const prisma = require("../lib/prisma");
 const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/email");
 const { AppError } = require("../middleware/error-handler");
 const { createPasswordResetLink } = require("../utils/password-reset");
+const { resolveRegistrationAttribution } = require("../utils/referral");
+const referral = require("../utils/referral");
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_NUMBER_PATTERN = /^0[17]\d{8}$/;
@@ -121,12 +123,37 @@ async function register(req, res) {
     true,
   );
   const jwtSecret = getJwtSecret();
+
+  const ref = req.body?.ref;
+
+  const attribution = await resolveRegistrationAttribution({
+    refCode: referral,
+    newUserEmail: email,
+  });
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   let user;
   try {
     user = await prisma.user.create({
-      data: { email, passwordHash, name, phoneNumber },
+      data: {
+        email,
+        passwordHash,
+        name,
+        phoneNumber,
+        referredByCode: attribution.referredByCode,
+        referredByPromoterId: attribution.referredByPromoterId,
+        referredAt: attribution.referredAt,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        subscriptionExpiresAt: true,
+        createdAt: true,
+        referredByCode: true, // optional: omit from public response if you prefer
+      },
     });
   } catch (err) {
     // Unique constraint on email

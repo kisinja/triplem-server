@@ -34,11 +34,18 @@ enum AuditTargetType {
   payment
   message
   title
+  promoter
 }
 
 enum TitleType {
   movie
   tv
+}
+
+enum CommissionStatus {
+  PENDING // earned, not yet paid out
+  PAID // included in a payout
+  CANCELLED // refund before payout
 }
 
 model User {
@@ -61,6 +68,16 @@ model User {
   auditLogs        AuditLog[]       @relation("AuditAdmin")
   blockedTitles    BlockedTitle[]   @relation("BlockedTitleCreator")
   resolvedMessages ContactMessage[] @relation("MessageResolver")
+
+  referredByCode       String?   @db.VarChar(32)
+  referredByPromoterId String?
+  referredByPromoter   Promoter? @relation("UserReferrals", fields: [referredByPromoterId], references: [id], onDelete: SetNull)
+  referredAt           DateTime?
+
+  /// If this user is a linked promoter account
+  promoterProfile Promoter? @relation("PromoterAccount")
+
+  commissions Commission[] @relation("CommissionUser")
 
   @@index([createdAt])
   @@index([subscriptionExpiresAt])
@@ -133,10 +150,103 @@ model Payment {
   failureReason     String?
   paidAt            DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  commission Commission?
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// --- Promoter ---
+model Promoter {
+  id     String  @id @default(uuid())
+  code   String  @unique @db.VarChar(32) // e.g. JANE25
+  name   String
+  /// Optional linked login (promoter dashboard)
+  userId String? @unique
+  user   User?   @relation("PromoterAccount", fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Stored as basis points: 2500 = 25.00%
+  commissionBps Int     @default(2500)
+  /// Days from referred user's FIRST successful payment
+  windowDays    Int     @default(90)
+  active        Boolean @default(true)
+
+  mpesaPhone String? // for admin payouts
+  notes      String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdByAdminId String?
+
+  referrals   User[]       @relation("UserReferrals")
+  commissions Commission[]
+  payouts     Payout[]
+
+  @@index([active])
+  @@index([code])
+}
+
+// --- One row per SUCCEEDED payment that earned commission ---
+model Commission {
+  id Int @id @default(autoincrement())
+
+  promoterId String
+  promoter   Promoter @relation(fields: [promoterId], references: [id], onDelete: Restrict)
+
+  /// Paying (referred) user — keep row if user is deleted via SetNull
+  userId String?
+  user   User?   @relation("CommissionUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  paymentId Int?     @unique // one commission per payment
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  /// Snapshot of payment amount (KES major units as Decimal)
+  paymentAmount Decimal @db.Decimal(12, 2)
+  /// Rate used at earn time (bps) — history safe
+  rateBps       Int
+  /// commission = round(paymentAmount * rateBps / 10000) in cents then / 100
+  amount        Decimal @db.Decimal(12, 2)
+
+  status CommissionStatus @default(PENDING)
+
+  /// Set when included in a payout
+  payoutId Int?
+  payout   Payout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  /// For negative adjustments after a paid commission was refunded
+  adjustmentOfId Int?
+  adjustmentOf   Commission?  @relation("CommissionAdjustments", fields: [adjustmentOfId], references: [id], onDelete: SetNull)
+  adjustments    Commission[] @relation("CommissionAdjustments")
+
+  earnedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([promoterId, status])
+  @@index([userId])
+  @@index([earnedAt])
+}
+
+// --- Manual M-Pesa payout recorded by admin ---
+model Payout {
+  id         Int      @id @default(autoincrement())
+  promoterId String
+  promoter   Promoter @relation(fields: [promoterId], references: [id], onDelete: Restrict)
+
+  amount       Decimal  @db.Decimal(12, 2) // must be >= 200
+  mpesaReceipt String
+  paidAt       DateTime
+  notes        String?
+  recordedById String? // admin user id
+
+  commissions Commission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([promoterId])
+  @@index([paidAt])
 }

@@ -12,6 +12,7 @@ const detailsRoutes = require("./routes/details.routes");
 const contactRoutes = require("./routes/contact.routes");
 const publicRoutes = require("./routes/public.routes");
 const adminRoutes = require("./routes/admin.routes");
+const promoterRoutes = require("./routes/promoter.routes");
 
 const { requireAuth } = require("./middleware/auth");
 const { requireAdmin } = require("./middleware/admin");
@@ -50,6 +51,8 @@ app.use("/api", detailsRoutes);
 app.use("/api", meRoute);
 app.use("/api/", playerRoutes);
 app.use("/api/feed", feedRoutes);
+app.use("/api/promoter", promoterRoutes);
+
 const adminLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 300,

@@ -8,6 +8,10 @@ const {
   resolvePaymentPlan,
 } = require("../utils/subscription");
 const { clearBlockedTitleCache } = require("../utils/blocked-titles");
+const {
+  earnCommissionForPayment,
+  reverseCommissionForPayment,
+} = require("../utils/earnCommision");
 
 const USER_SELECT = {
   id: true,
@@ -36,6 +40,9 @@ const PAYMENT_SELECT = {
   createdAt: true,
   updatedAt: true,
 };
+
+// https://watchtriplem.co.ke/?ref=LVS12
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROLES = ["ADMIN", "USER"];
@@ -56,8 +63,15 @@ function assertAllowedKeys(value, allowed) {
 }
 
 function requiredString(value, label, maxLength) {
-  if (typeof value !== "string" || !value.trim() || value.trim().length > maxLength) {
-    throw new AppError(400, `${label} must be a non-empty string of at most ${maxLength} characters.`);
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.trim().length > maxLength
+  ) {
+    throw new AppError(
+      400,
+      `${label} must be a non-empty string of at most ${maxLength} characters.`,
+    );
   }
   return value.trim();
 }
@@ -103,7 +117,12 @@ function getPagination(query, sortValues) {
     throw new AppError(400, "sort is not supported.");
   }
   const [sortField, sortOrder] = sort.split(":");
-  return { page, limit, skip: (page - 1) * limit, orderBy: { [sortField]: sortOrder } };
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+    orderBy: { [sortField]: sortOrder },
+  };
 }
 
 function getSearch(value) {
@@ -128,7 +147,10 @@ function getIsoDate(value, label) {
   if (Number.isNaN(date.getTime())) {
     throw new AppError(400, `${label} must be a valid ISO date.`);
   }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value) && date.toISOString().slice(0, 10) !== value) {
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    date.toISOString().slice(0, 10) !== value
+  ) {
     throw new AppError(400, `${label} must be a valid ISO date.`);
   }
   if (label === "to" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -152,10 +174,15 @@ function paginationResponse(page, limit, total) {
 
 async function serializableTransaction(callback) {
   try {
-    return await prisma.$transaction(callback, { isolationLevel: "Serializable" });
+    return await prisma.$transaction(callback, {
+      isolationLevel: "Serializable",
+    });
   } catch (error) {
     if (error.code === "P2034") {
-      throw new AppError(409, "This operation conflicted with another update. Please retry.");
+      throw new AppError(
+        409,
+        "This operation conflicted with another update. Please retry.",
+      );
     }
     throw error;
   }
@@ -269,7 +296,12 @@ async function getStats(req, res) {
   res.json({
     success: true,
     stats: {
-      users: { total: usersTotal, newLast7Days, newLast30Days, activeSubscribers },
+      users: {
+        total: usersTotal,
+        newLast7Days,
+        newLast30Days,
+        activeSubscribers,
+      },
       revenue: {
         today: Number(revenueRows[0].today),
         last7Days: Number(revenueRows[0].last7Days),
@@ -301,7 +333,8 @@ async function listUsers(req, res) {
     ];
   }
   if (req.query.role !== undefined) {
-    if (!ROLES.includes(req.query.role)) throw new AppError(400, "role is invalid.");
+    if (!ROLES.includes(req.query.role))
+      throw new AppError(400, "role is invalid.");
     where.role = req.query.role;
   }
   const now = new Date();
@@ -341,7 +374,11 @@ async function listUsers(req, res) {
     subscriptionStatus: subscriptionStatus(user.subscriptionExpiresAt, now),
     paymentsCount: _count.payments,
   }));
-  res.json({ success: true, data, pagination: paginationResponse(page, limit, total) });
+  res.json({
+    success: true,
+    data,
+    pagination: paginationResponse(page, limit, total),
+  });
 }
 
 async function getUser(req, res) {
@@ -389,16 +426,22 @@ async function updateUser(req, res) {
       req.body.name !== null &&
       (typeof req.body.name !== "string" || req.body.name.trim().length > 100)
     ) {
-      throw new AppError(400, "name must be a string of at most 100 characters or null.");
+      throw new AppError(
+        400,
+        "name must be a string of at most 100 characters or null.",
+      );
     }
     data.name = req.body.name === null ? null : req.body.name.trim() || null;
   }
   if (Object.hasOwn(req.body, "role")) {
-    if (!ROLES.includes(req.body.role)) throw new AppError(400, "role is invalid.");
-    if (id === req.userId) throw new AppError(409, "You cannot change your own role.");
+    if (!ROLES.includes(req.body.role))
+      throw new AppError(400, "role is invalid.");
+    if (id === req.userId)
+      throw new AppError(409, "You cannot change your own role.");
     data.role = req.body.role;
   }
-  if (!Object.keys(data).length) throw new AppError(400, "Provide name or role to update.");
+  if (!Object.keys(data).length)
+    throw new AppError(400, "Provide name or role to update.");
 
   const user = await serializableTransaction(async (db) => {
     const current = await db.user.findUnique({
@@ -408,7 +451,8 @@ async function updateUser(req, res) {
     if (!current) throw new AppError(404, "User not found.");
     if (data.role === "USER" && current.role === "ADMIN") {
       const admins = await db.user.count({ where: { role: "ADMIN" } });
-      if (admins <= 1) throw new AppError(409, "The last administrator cannot be demoted.");
+      if (admins <= 1)
+        throw new AppError(409, "The last administrator cannot be demoted.");
     }
     const updated = await db.user.update({
       where: { id },
@@ -470,10 +514,16 @@ async function updateSubscription(req, res) {
     }
     await writeAudit(db, {
       adminId: req.userId,
-      action: action === "grant" ? "user.subscription_granted" : "user.subscription_revoked",
+      action:
+        action === "grant"
+          ? "user.subscription_granted"
+          : "user.subscription_revoked",
       targetType: "user",
       targetId: id,
-      details: { ...(action === "grant" ? { days } : {}), ...(note ? { note } : {}) },
+      details: {
+        ...(action === "grant" ? { days } : {}),
+        ...(note ? { note } : {}),
+      },
     });
     return expiry;
   });
@@ -498,17 +548,24 @@ async function sendUserReset(req, res) {
     return { user, ...link };
   });
   try {
-    await sendPasswordResetEmail({ to: reset.user.email, resetUrl: reset.resetUrl });
+    await sendPasswordResetEmail({
+      to: reset.user.email,
+      resetUrl: reset.resetUrl,
+    });
   } catch (error) {
     console.error("Failed to send admin password reset email:", error.message);
-    throw new AppError(503, "The reset link was created but the email could not be sent.");
+    throw new AppError(
+      503,
+      "The reset link was created but the email could not be sent.",
+    );
   }
   res.json({ success: true, message: "Password reset email sent." });
 }
 
 async function deleteUser(req, res) {
   const id = getUuid(req.params.id, "User id");
-  if (id === req.userId) throw new AppError(409, "You cannot delete your own account.");
+  if (id === req.userId)
+    throw new AppError(409, "You cannot delete your own account.");
 
   try {
     await serializableTransaction(async (db) => {
@@ -526,14 +583,18 @@ async function deleteUser(req, res) {
       }
       if (user.role === "ADMIN") {
         const admins = await db.user.count({ where: { role: "ADMIN" } });
-        if (admins <= 1) throw new AppError(409, "The last administrator cannot be deleted.");
+        if (admins <= 1)
+          throw new AppError(409, "The last administrator cannot be deleted.");
       }
       const [auditCount, blockedCount] = await Promise.all([
         db.auditLog.count({ where: { adminId: id } }),
         db.blockedTitle.count({ where: { createdById: id } }),
       ]);
       if (auditCount || blockedCount) {
-        throw new AppError(409, "This user owns retained administrative records and cannot be deleted.");
+        throw new AppError(
+          409,
+          "This user owns retained administrative records and cannot be deleted.",
+        );
       }
       await writeAudit(db, {
         adminId: req.userId,
@@ -552,7 +613,10 @@ async function deleteUser(req, res) {
         "This user has payment records and cannot be deleted. Revoke the subscription instead.",
       );
     }
-    throw new AppError(409, "This user owns retained administrative records and cannot be deleted.");
+    throw new AppError(
+      409,
+      "This user owns retained administrative records and cannot be deleted.",
+    );
   }
   res.json({ success: true });
 }
@@ -560,13 +624,16 @@ async function deleteUser(req, res) {
 function getPaymentWhere(query) {
   const where = {};
   if (query.status !== undefined) {
-    if (!["PENDING", "SUCCEEDED", "FAILED", "REFUNDED"].includes(query.status)) {
+    if (
+      !["PENDING", "SUCCEEDED", "FAILED", "REFUNDED"].includes(query.status)
+    ) {
       throw new AppError(400, "status is invalid.");
     }
     where.status = query.status;
   }
   if (query.plan !== undefined) {
-    if (!Object.hasOwn(PLAN_DAYS, query.plan)) throw new AppError(400, "plan is invalid.");
+    if (!Object.hasOwn(PLAN_DAYS, query.plan))
+      throw new AppError(400, "plan is invalid.");
     where.plan = query.plan;
   }
   const q = getSearch(query.q);
@@ -580,9 +647,13 @@ function getPaymentWhere(query) {
   }
   const from = getIsoDate(query.from, "from");
   const to = getIsoDate(query.to, "to");
-  if (from && to && from > to) throw new AppError(400, "from must be earlier than or equal to to.");
+  if (from && to && from > to)
+    throw new AppError(400, "from must be earlier than or equal to to.");
   if (from || to) {
-    where.createdAt = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
+    where.createdAt = {
+      ...(from ? { gte: from } : {}),
+      ...(to ? { lte: to } : {}),
+    };
   }
   return where;
 }
@@ -600,7 +671,10 @@ async function listPayments(req, res) {
     prisma.payment.count({ where }),
     prisma.payment.findMany({
       where,
-      select: { ...PAYMENT_SELECT, user: { select: { id: true, email: true, name: true } } },
+      select: {
+        ...PAYMENT_SELECT,
+        user: { select: { id: true, email: true, name: true } },
+      },
       orderBy,
       skip,
       take: limit,
@@ -641,9 +715,15 @@ async function reconcilePayment(req, res) {
   const id = getPaymentId(req.params.id);
   assertObject(req.body);
   assertAllowedKeys(req.body, ["mpesaReceipt", "note"]);
-  const mpesaReceipt = requiredString(req.body.mpesaReceipt, "mpesaReceipt", 100);
+  const mpesaReceipt = requiredString(
+    req.body.mpesaReceipt,
+    "mpesaReceipt",
+    100,
+  );
   const note =
-    req.body.note === undefined ? undefined : requiredString(req.body.note, "note", 500);
+    req.body.note === undefined
+      ? undefined
+      : requiredString(req.body.note, "note", 500);
 
   const result = await prisma.$transaction(async (db) => {
     const payment = await db.payment.findUnique({
@@ -653,7 +733,10 @@ async function reconcilePayment(req, res) {
     if (!payment) throw new AppError(404, "Payment not found.");
     if (payment.status === "SUCCEEDED") return { payment, idempotent: true };
     if (!["PENDING", "FAILED"].includes(payment.status)) {
-      throw new AppError(409, "Only pending or failed payments can be reconciled.");
+      throw new AppError(
+        409,
+        "Only pending or failed payments can be reconciled.",
+      );
     }
     const plan = resolvePaymentPlan(payment);
     const paidAt = new Date();
@@ -671,19 +754,37 @@ async function reconcilePayment(req, res) {
       }
       throw new AppError(409, "This payment can no longer be reconciled.");
     }
+
     await extendSubscription(db, payment.userId, plan.durationMs, paidAt);
+
+    const succeededPayment = await db.payment.findUnique({
+      where: { id },
+      select: PAYMENT_SELECT,
+    });
+    if (succeededPayment) {
+      await earnCommissionForPayment(db, succeededPayment);
+    }
+
     await writeAudit(db, {
       adminId: req.userId,
       action: "payment.reconciled",
       targetType: "payment",
-      targetId: id,
+      targetId: String(id),
       details: { mpesaReceipt, ...(note ? { note } : {}) },
     });
+
     return {
-      payment: { ...payment, status: "SUCCEEDED", mpesaReceipt, paidAt, failureReason: null },
+      payment: {
+        ...payment,
+        status: "SUCCEEDED",
+        mpesaReceipt,
+        paidAt,
+        failureReason: null,
+      },
       idempotent: false,
     };
   });
+
   res.json({
     success: true,
     payment: toPayment(result.payment),
@@ -713,6 +814,7 @@ async function refundPayment(req, res) {
     if (current.status !== "SUCCEEDED") {
       throw new AppError(409, "Only succeeded payments can be refunded.");
     }
+
     const transitioned = await db.payment.updateMany({
       where: { id, status: "SUCCEEDED" },
       data: { status: "REFUNDED" },
@@ -720,25 +822,33 @@ async function refundPayment(req, res) {
     if (!transitioned.count) {
       throw new AppError(409, "Only succeeded payments can be refunded.");
     }
+
+    // PENDING commission → CANCELLED; PAID → negative adjustment
+    await reverseCommissionForPayment(db, id);
+
     const updated = await db.payment.findUnique({
       where: { id },
       select: PAYMENT_SELECT,
     });
+
     if (revokeAccess) {
       await db.user.update({
         where: { id: current.userId },
         data: { subscriptionExpiresAt: new Date() },
       });
     }
+
     await writeAudit(db, {
       adminId: req.userId,
       action: "payment.refunded",
       targetType: "payment",
-      targetId: id,
+      targetId: String(id),
       details: { note, revokeAccess },
     });
+
     return updated;
   });
+
   res.json({ success: true, payment: toPayment(payment) });
 }
 
@@ -750,11 +860,13 @@ async function listMessages(req, res) {
   ]);
   const where = {};
   if (req.query.status !== undefined) {
-    if (!MESSAGE_STATUSES.includes(req.query.status)) throw new AppError(400, "status is invalid.");
+    if (!MESSAGE_STATUSES.includes(req.query.status))
+      throw new AppError(400, "status is invalid.");
     where.status = req.query.status;
   }
   if (req.query.topic !== undefined) {
-    if (!TOPICS.includes(req.query.topic)) throw new AppError(400, "topic is invalid.");
+    if (!TOPICS.includes(req.query.topic))
+      throw new AppError(400, "topic is invalid.");
     where.topic = req.query.topic;
   }
   const q = getSearch(req.query.q);
@@ -787,7 +899,11 @@ async function listMessages(req, res) {
       take: limit,
     }),
   ]);
-  res.json({ success: true, data, pagination: paginationResponse(page, limit, total) });
+  res.json({
+    success: true,
+    data,
+    pagination: paginationResponse(page, limit, total),
+  });
 }
 
 async function updateMessage(req, res) {
@@ -859,7 +975,11 @@ async function listAuditLogs(req, res) {
       take: limit,
     }),
   ]);
-  res.json({ success: true, data, pagination: paginationResponse(page, limit, total) });
+  res.json({
+    success: true,
+    data,
+    pagination: paginationResponse(page, limit, total),
+  });
 }
 
 async function listBlockedTitles(req, res) {
@@ -871,7 +991,8 @@ async function listBlockedTitles(req, res) {
   ]);
   const where = {};
   if (req.query.type !== undefined) {
-    if (!TITLE_TYPES.includes(req.query.type)) throw new AppError(400, "type is invalid.");
+    if (!TITLE_TYPES.includes(req.query.type))
+      throw new AppError(400, "type is invalid.");
     where.type = req.query.type;
   }
   const [total, data] = await prisma.$transaction([
@@ -891,21 +1012,32 @@ async function listBlockedTitles(req, res) {
       take: limit,
     }),
   ]);
-  res.json({ success: true, data, pagination: paginationResponse(page, limit, total) });
+  res.json({
+    success: true,
+    data,
+    pagination: paginationResponse(page, limit, total),
+  });
 }
 
 async function createBlockedTitle(req, res) {
   assertObject(req.body);
   assertAllowedKeys(req.body, ["type", "tmdbId", "reason"]);
   const { type, tmdbId } = req.body;
-  if (!TITLE_TYPES.includes(type)) throw new AppError(400, "type must be movie or tv.");
+  if (!TITLE_TYPES.includes(type))
+    throw new AppError(400, "type must be movie or tv.");
   if (!Number.isInteger(tmdbId) || tmdbId < 1 || tmdbId > 2147483647) {
     throw new AppError(400, "tmdbId must be a positive integer.");
   }
   let reason = null;
   if (req.body.reason !== undefined && req.body.reason !== null) {
-    if (typeof req.body.reason !== "string" || req.body.reason.trim().length > 500) {
-      throw new AppError(400, "reason must be a string of at most 500 characters.");
+    if (
+      typeof req.body.reason !== "string" ||
+      req.body.reason.trim().length > 500
+    ) {
+      throw new AppError(
+        400,
+        "reason must be a string of at most 500 characters.",
+      );
     }
     reason = req.body.reason.trim() || null;
   }
