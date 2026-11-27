@@ -13,6 +13,7 @@ const contactRoutes = require("./routes/contact.routes");
 const publicRoutes = require("./routes/public.routes");
 const adminRoutes = require("./routes/admin.routes");
 const promoterRoutes = require("./routes/promoter.routes");
+const libraryRoutes = require("./routes/library.routes");
 
 const { requireAuth } = require("./middleware/auth");
 const { requireAdmin } = require("./middleware/admin");
@@ -52,15 +53,17 @@ app.use("/api", meRoute);
 app.use("/api/", playerRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/promoter", promoterRoutes);
+app.use("/api/library", libraryRoutes);
 
 const adminLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 300,
   message: "Too many admin requests. Please try again later.",
 });
+
 app.use("/api/admin", adminLimiter, requireAuth, requireAdmin, adminRoutes);
 
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     message: "Movie discovery server (KES 30/week via Paystack)",
     endpoints: {
